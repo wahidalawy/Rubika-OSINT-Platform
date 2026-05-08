@@ -60,6 +60,10 @@ class RubikaEngine:
         while self.is_running:
             try:
                 data = await self.client.get_updates(offset=self.offset)
+                
+                if data and data.get("data", {}).get("updates"):
+                    logger.debug(f"Raw data received: {data}")
+
                 if data and data.get("status") == "OK":
                     data_block = data.get("data", {})
                     if "next_offset" in data_block and data_block["next_offset"]:
