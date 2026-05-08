@@ -15,18 +15,21 @@ class RubikaEngine:
         msg = update.get("new_message", {})
         msg_id = msg.get("message_id")
         
-        # --- ENTERPRISE DEDUPLICATION VIA REDIS ---
+        # --- Redis Deduplication ---
         if not msg_id or await db.is_message_processed(msg_id):
             return
             
         chat_id = update.get("chat_id", "")
-        text = msg.get("text", "")
+        # Safe text extraction (prevents crash on photo-only messages)
+        text = msg.get("text") or ""
         
-        if not chat_id.startswith("u0"):
+        # --- The b0 Fix: Allow Bot PV chats and User chats ---
+        if not (chat_id.startswith("u0") or chat_id.startswith("b0")):
             return
 
-        logger.info("Processing user payload", extra={"extra_context": {"user_id": chat_id, "msg_id": msg_id}})
+        logger.info("Processing user payload", extra={"extra_context": {"chat_id": chat_id, "msg_id": msg_id}})
 
+        # 1. Start Command
         if text.strip() in ["/start", "استارت", "شروع", "help"]:
             welcome_text = (
                 "به ربات استخراج آیدی کانال خوش آمدید 🌹\n"
@@ -37,20 +40,21 @@ class RubikaEngine:
             await self.client.send_message(chat_id, welcome_text, reply_to_message_id=msg_id)
             return
 
+        # 2. Extraction Logic
         raw_json = json.dumps(update)
         channel_ids = list(set(re.findall(r"(c0[a-zA-Z0-9]{30})", raw_json)))
         
         if channel_ids:
             extracted_id = channel_ids[0]
             
-            # --- PERSIST TO POSTGRESQL ---
+            # --- Save to PostgreSQL ---
             await db.save_channel(extracted_id, chat_id)
             
             reply_text = f"🎉 آیدی کانال استخراج و در دیتابیس ثبت شد:\n\n🔴 `{extracted_id}`"
             await self.client.send_message(chat_id, reply_text, reply_to_message_id=msg_id)
-            logger.info("Channel extracted & saved", extra={"extra_context": {"user_id": chat_id, "extracted_id": extracted_id}})
+            logger.info("Channel extracted & saved", extra={"extra_context": {"extracted_id": extracted_id}})
         else:
-            error_text = "⚠️ آیدی کانالی پیدا نشد. مطمئنید پیام را از یک کانال پابلیک فوروارد کردید؟"
+            error_text = "⚠️ آیدی کانالی پیدا نشد. مطمئنید پیام را مستقیماً از یک کانال پابلیک فوروارد کردید؟"
             await self.client.send_message(chat_id, error_text, reply_to_message_id=msg_id)
 
     async def start_polling(self):
@@ -60,17 +64,16 @@ class RubikaEngine:
         while self.is_running:
             try:
                 data = await self.client.get_updates(offset=self.offset)
-                
-                if data and data.get("data", {}).get("updates"):
-                    logger.debug(f"Raw data received: {data}")
-
                 if data and data.get("status") == "OK":
                     data_block = data.get("data", {})
-                    if "next_offset" in data_block and data_block["next_offset"]:
-                        self.offset = data_block["next_offset"]
+                    
+                    # --- The Time Loop Fix: next_offset_id ---
+                    if "next_offset_id" in data_block and data_block["next_offset_id"]:
+                        self.offset = data_block["next_offset_id"]
 
                     for update in data_block.get("updates", []):
                         asyncio.create_task(self.process_update(update))
+                        
             except Exception as e:
                 logger.error(f"Critical Polling Error: {str(e)}", exc_info=True)
             await asyncio.sleep(2)
