@@ -2,15 +2,16 @@ import asyncio
 from config.settings import settings
 from bot.logger import logger
 from bot.core import RubikaEngine
+from bot.database import db
 
 async def async_main():
     engine = RubikaEngine()
     try:
         settings.validate()
-        logger.info("System starting up...", extra={"extra_context": {"action": "startup_sequence", "status": "initializing"}})
+        logger.info("System starting up...")
         
-        masked_token = f"***{settings.BOT_TOKEN[-5:]}"
-        logger.info(f"Configuration loaded. Bot Token: {masked_token}")
+        # --- CONNECT TO DATABASES ---
+        await db.connect()
         
         # Start the asynchronous engine
         await engine.start_polling()
@@ -23,10 +24,11 @@ async def async_main():
         logger.critical(f"Fatal Startup Error: {str(e)}", exc_info=True)
     finally:
         await engine.stop()
+        # --- DISCONNECT FROM DATABASES ---
+        await db.disconnect()
 
 if __name__ == "__main__":
-    # Bootstrapping the asynchronous event loop
     try:
         asyncio.run(async_main())
     except KeyboardInterrupt:
-        pass # Handle the terminal interrupt cleanly
+        pass
