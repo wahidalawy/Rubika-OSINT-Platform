@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: rubika_osint
     ports:
-      - "5433:5432" # تغییر پورت هاست به 5433
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -20,6 +20,17 @@ services:
     restart: always
     ports:
       - "6380:6379"
+
+  # اضافه شدن سرویس ربات پایتونی ما
+  bot:
+    build: .
+    container_name: rubika_engine
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
 
 volumes:
   postgres_data:
