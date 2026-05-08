@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: rubika_osint
     ports:
-      - "5432:5432" # Host 5432 maps to Container 5432
+      - "5433:5432" # تغییر پورت هاست به 5433
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -19,7 +19,7 @@ services:
     container_name: rubika_cache
     restart: always
     ports:
-      - "6380:6379" # CHANGED: Host 6380 maps to Container 6379
+      - "6380:6379"
 
 volumes:
   postgres_data:
